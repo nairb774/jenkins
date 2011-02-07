@@ -23,7 +23,9 @@
  */
 package hudson.remoting;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -34,11 +36,13 @@ import java.util.Arrays;
 import java.util.Random;
 
 import org.apache.commons.codec.binary.Base64;
+import org.junit.Test;
 
 /**
  * @author Kohsuke Kawaguchi
  */
-public class BinarySafeStreamTest extends TestCase {
+public class BinarySafeStreamTest {
+    @Test
     public void test1() throws IOException {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         OutputStream o = BinarySafeStream.wrap(buf);
@@ -55,6 +59,7 @@ public class BinarySafeStreamTest extends TestCase {
         assertEquals(-1,in.read());
     }
 
+    @Test
     public void testSingleWrite() throws IOException {
         byte[] ds = getDataSet(65536);
         String master = new String(Base64.encodeBase64(ds));
@@ -66,6 +71,7 @@ public class BinarySafeStreamTest extends TestCase {
         assertEquals(buf.toString(),master);
     }
 
+    @Test
     public void testChunkedWrites() throws IOException {
         byte[] ds = getDataSet(65536);
         String master = new String(Base64.encodeBase64(ds));
@@ -79,10 +85,12 @@ public class BinarySafeStreamTest extends TestCase {
         }
     }
 
+    @Test
     public void testRoundtripNoFlush() throws IOException {
         _testRoundtrip(false);
     }
 
+    @Test
     public void testRoundtripFlush() throws IOException {
         _testRoundtrip(true);
     }
