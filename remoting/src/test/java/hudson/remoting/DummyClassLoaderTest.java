@@ -23,12 +23,15 @@
  */
 package hudson.remoting;
 
-import junit.framework.TestCase;
+import static org.junit.Assert.assertTrue;
+
+import org.junit.Test;
 
 /**
  * @author Kohsuke Kawaguchi
  */
-public class DummyClassLoaderTest extends TestCase {
+public class DummyClassLoaderTest {
+    @Test
     public void testLoad() throws Throwable {
         DummyClassLoader cl = new DummyClassLoader(this.getClass().getClassLoader());
         Callable c = (Callable) cl.loadClass("hudson.remoting.test.TestCallable").newInstance();
