@@ -23,26 +23,53 @@
  */
 package hudson.remoting;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import java.util.concurrent.CancellationException;
-import junit.framework.Test;
 
+import java.util.Collection;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
+import org.jvnet.hudson.test.Bug;
 
 /**
  * Testing the basic features.
  * 
  * @author Kohsuke Kawaguchi
  */
-public class SimpleTest extends RmiTestBase {
+@RunWith(Parameterized.class)
+public class SimpleTest {
+    @Parameters
+    public static Collection<Object[]> getParameters() {
+        return ChannelRule.getParameters();
+    }
+    
+    @Rule
+    public final ChannelRule channelRule;
+    
+    public SimpleTest(final ChannelRule.Type type) {
+        channelRule = new ChannelRule(type);
+    }
+    
+    @Test
     public void test1() throws Exception {
-        int r = channel.call(new Callable1());
+        int r = channelRule.getChannel().call(new Callable1());
         System.out.println("result=" + r);
         assertEquals(5,r);
     }
 
+    @Test
     public void test1Async() throws Exception {
-        Future<Integer> r = channel.callAsync(new Callable1());
+        Future<Integer> r = channelRule.getChannel().callAsync(new Callable1());
         System.out.println("result="+r.get());
         assertEquals(5,(int)r.get());
     }
@@ -54,19 +81,20 @@ public class SimpleTest extends RmiTestBase {
         }
     }
 
-
+    @Test
     public void test2() throws Exception {
         try {
-            channel.call(new Callable2());
+            channelRule.getChannel().call(new Callable2());
             fail();
         } catch (RuntimeException e) {
             assertEquals(e.getMessage(),"foo");
         }
     }
 
+    @Test
     public void test2Async() throws Exception {
         try {
-            Future<Integer> r = channel.callAsync(new Callable2());
+            Future<Integer> r = channelRule.getChannel().callAsync(new Callable2());
             r.get();
             fail();
         } catch (ExecutionException e) {
@@ -83,9 +111,10 @@ public class SimpleTest extends RmiTestBase {
     /**
      * Makes sure that proxied object can be sent back to the origin and resolve correctly.
      */
+    @Test
     public void test3() throws Exception {
         Foo c = new Foo() {};
-
+        Channel channel = channelRule.getChannel();
         Foo r = channel.call(new Echo<Foo>(channel.export(Foo.class,c)));
         assertSame(c,r);
     }
@@ -109,10 +138,11 @@ public class SimpleTest extends RmiTestBase {
      * Currently seems to be used by MavenBuilder.call and Proc.RemoteProc.kill
      * (in turn used by MercurialSCM.joinWithTimeout when polling on remote host).
      */
-    //@Bug(4611)
+    @Bug(4611)
+    @Test
     public void testCancellation() throws Exception {
         Cancellable task = new Cancellable();
-        Future<Integer> r = channel.callAsync(task);
+        Future<Integer> r = channelRule.getChannel().callAsync(task);
         r.cancel(true);
         try {
             r.get();
@@ -131,9 +161,5 @@ public class SimpleTest extends RmiTestBase {
             ran = true;
             return 0;
         }
-    }
-
-    public static Test suite() throws Exception {
-        return buildSuite(SimpleTest.class);
     }
 }
