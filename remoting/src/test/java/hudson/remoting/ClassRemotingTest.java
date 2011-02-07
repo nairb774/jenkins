@@ -23,7 +23,16 @@
  */
 package hudson.remoting;
 
-import junit.framework.Test;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+
+import java.util.Collection;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.commons.EmptyVisitor;
 
@@ -32,14 +41,28 @@ import org.objectweb.asm.commons.EmptyVisitor;
  *
  * @author Kohsuke Kawaguchi
  */
-public class ClassRemotingTest extends RmiTestBase {
+@RunWith(Parameterized.class)
+public class ClassRemotingTest {
+    @Parameters
+    public static Collection<Object[]> getParameters() {
+        return ChannelRule.getParameters();
+    }
+    
+    @Rule
+    public final ChannelRule channelRule;
+    
+    public ClassRemotingTest(final ChannelRule.Type type) {
+        channelRule = new ChannelRule(type);
+    }
+    
+    @Test
     public void test1() throws Throwable {
         // call a class that's only available on DummyClassLoader, so that on the remote channel
         // it will be fetched from this class loader and not from the system classloader.
         DummyClassLoader cl = new DummyClassLoader(this.getClass().getClassLoader());
         Callable c = (Callable) cl.loadClass("hudson.remoting.test.TestCallable").newInstance();
 
-        Object[] r = (Object[]) channel.call(c);
+        Object[] r = (Object[]) channelRule.getChannel().call(c);
 
         System.out.println(r[0]);
 
@@ -54,9 +77,5 @@ public class ClassRemotingTest extends RmiTestBase {
         System.out.println(r[2]);
         System.out.println(r[3]);
         assertEquals(r[2],r[3]);
-    }
-
-    public static Test suite() throws Exception {
-        return buildSuite(ClassRemotingTest.class);
     }
 }
