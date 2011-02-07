@@ -23,21 +23,44 @@
  */
 package hudson.remoting;
 
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.attrs.StackMapAttribute;
 
 import java.io.IOException;
+import java.util.Collection;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
 /**
  * @author Kohsuke Kawaguchi
  */
-public class PrefetchTest extends RmiTestBase {
+@RunWith(Parameterized.class)
+public class PrefetchTest {
+    @Parameters
+    public static Collection<Object[]> getParameters() {
+        return ChannelRule.getParameters();
+    }
+    
+    @Rule
+    public final ChannelRule channelRule;
+    
+    public PrefetchTest(final ChannelRule.Type type) {
+        channelRule = new ChannelRule(type);
+    }
+    
+    @Test
     public void testPrefetch() throws Exception {
         VerifyTask vt = new VerifyTask();
-        assertTrue( channel.preloadJar(vt,ClassReader.class));
-        assertFalse(channel.preloadJar(vt,ClassReader.class));
+        assertTrue( channelRule.getChannel().preloadJar(vt,ClassReader.class));
+        assertFalse(channelRule.getChannel().preloadJar(vt,ClassReader.class));
         // TODO: how can I do a meaningful test of this feature?
-        System.out.println(channel.call(vt));
+        System.out.println(channelRule.getChannel().call(vt));
     }
 
     private static class VerifyTask implements Callable<String,IOException> {
