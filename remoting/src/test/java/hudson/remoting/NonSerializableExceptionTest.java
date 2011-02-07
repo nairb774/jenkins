@@ -39,7 +39,7 @@ public class NonSerializableExceptionTest extends RmiTestBase {
             channel.call(new Failure());
         } catch (ProxyException p) {
             // verify that we got the right kind of exception
-            assertTrue(p.getMessage().contains("NoneSerializableException"));
+            assertTrue(p.getMessage().contains("NonSerializableException"));
             assertTrue(p.getMessage().contains("message1"));
             ProxyException nested = p.getCause();
             assertTrue(nested.getMessage().contains("SocketException"));
@@ -48,17 +48,17 @@ public class NonSerializableExceptionTest extends RmiTestBase {
         }
     }
 
-    private static final class NoneSerializableException extends Exception {
+    private static final class NonSerializableException extends Exception {
         private final Object o = new Object(); // this is not serializable
 
-        private NoneSerializableException(String msg, Throwable cause) {
+        private NonSerializableException(String msg, Throwable cause) {
             super(msg, cause);
         }
     }
 
     private static final class Failure implements Callable {
         public Object call() throws Throwable {
-            throw new NoneSerializableException("message1",new SocketException("message2"));
+            throw new NonSerializableException("message1",new SocketException("message2"));
         }
     }
 }
