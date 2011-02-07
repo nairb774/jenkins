@@ -23,20 +23,44 @@
  */
 package hudson.remoting;
 
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
+
 import java.net.SocketException;
+import java.util.Collection;
+
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
 /**
  * @author Kohsuke Kawaguchi
  */
-public class NonSerializableExceptionTest extends RmiTestBase {
+@RunWith(Parameterized.class)
+public class NonSerializableExceptionTest {
+    @Parameters
+    public static Collection<Object[]> getParameters() {
+        return ChannelRule.getParameters();
+    }
+    
+    @Rule
+    public final ChannelRule channelRule;
+    
+    public NonSerializableExceptionTest(final ChannelRule.Type type) {
+        channelRule = new ChannelRule(type);
+    }
+    
     /**
      * Makes sure non-serializable exceptions are gracefully handled.
      *
      * HUDSON-1041.
      */
+    @Test
     public void test1() throws Throwable {
         try {
-            channel.call(new Failure());
+            channelRule.getChannel().call(new Failure());
         } catch (ProxyException p) {
             // verify that we got the right kind of exception
             assertTrue(p.getMessage().contains("NonSerializableException"));
