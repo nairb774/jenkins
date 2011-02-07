@@ -23,34 +23,58 @@
  */
 package hudson.remoting;
 
-import hudson.remoting.ChannelRunner.InProcessCompatibilityMode;
-import junit.framework.Test;
-import org.apache.commons.io.IOUtils;
-import org.apache.commons.io.output.NullOutputStream;
-import org.jvnet.hudson.test.Bug;
-import org.jvnet.hudson.test.For;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
-import java.io.OutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.io.Serializable;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.concurrent.ExecutionException;
+
+import org.apache.commons.io.IOUtils;
+import org.apache.commons.io.output.NullOutputStream;
+import org.junit.Ignore;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
+import org.jvnet.hudson.test.Bug;
+import org.jvnet.hudson.test.For;
 
 /**
  * Test {@link Pipe}.
  *
  * @author Kohsuke Kawaguchi
  */
-public class PipeTest extends RmiTestBase implements Serializable {
+@RunWith(Parameterized.class)
+public class PipeTest {
+    @Parameters
+    public static Collection<Object[]> getParameters() {
+        return ChannelRule.getParameters();
+    }
+    
+    @Rule
+    public final ChannelRule channelRule;
+    
+    public PipeTest(final ChannelRule.Type type) {
+        channelRule = new ChannelRule(type);
+    }
+    
     /**
      * Test the "remote-write local-read" pipe.
      */
+    @Test
     public void testRemoteWrite() throws Exception {
         Pipe p = Pipe.createRemoteToLocal();
-        Future<Integer> f = channel.callAsync(new WritingCallable(p));
+        Future<Integer> f = channelRule.getChannel().callAsync(new WritingCallable(p));
 
         read(p);
 
@@ -59,15 +83,30 @@ public class PipeTest extends RmiTestBase implements Serializable {
         assertEquals(5,r);
     }
     
+    private static class CountBytes implements Callable<Integer, IOException>, Serializable {
+        private final Pipe p;
+        
+        private CountBytes(final Pipe p) {
+            this.p = p;
+        }
+        
+        public Integer call() throws IOException {
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+            IOUtils.copy(p.getIn(), baos);
+            return baos.size();
+        }
+    }
+
     /**
      * Have the reader close the read end of the pipe while the writer is still writing.
      * The writer should pick up a failure.
      */
     @Bug(8592)
     @For(Pipe.class)
+    @Test
     public void testReaderCloseWhileWriterIsStillWriting() throws Exception {
         final Pipe p = Pipe.createRemoteToLocal();
-        final Future<Void> f = channel.callAsync(new InfiniteWriter(p));
+        final Future<Void> f = channelRule.getChannel().callAsync(new InfiniteWriter(p));
         final InputStream in = p.getIn();
         assertEquals(in.read(), 0);
         in.close();
@@ -118,9 +157,10 @@ public class PipeTest extends RmiTestBase implements Serializable {
     /**
      * Test the "local-write remote-read" pipe.
      */
+    @Test
     public void testLocalWrite() throws Exception {
         Pipe p = Pipe.createLocalToRemote();
-        Future<Integer> f = channel.callAsync(new ReadingCallable(p));
+        Future<Integer> f = channelRule.getChannel().callAsync(new ReadingCallable(p));
 
         write(p);
 
@@ -129,9 +169,10 @@ public class PipeTest extends RmiTestBase implements Serializable {
         assertEquals(5,r);
     }
 
+    @Test
     public void testLocalWrite2() throws Exception {
         Pipe p = Pipe.createLocalToRemote();
-        Future<Integer> f = channel.callAsync(new ReadingCallable(p));
+        Future<Integer> f = channelRule.getChannel().callAsync(new ReadingCallable(p));
 
         Thread.sleep(2000); // wait for remote to connect to local.
         write(p);
@@ -147,9 +188,10 @@ public class PipeTest extends RmiTestBase implements Serializable {
         void readRest() throws IOException;
     }
 
+    @Test
     public void testSaturation() throws Exception {
-        if (channelRunner instanceof InProcessCompatibilityMode)
-            return; // can't do this test without the throttling support.
+        // can't do this test without the throttling support.
+        assumeTrue(channelRule.getChannel().remoteCapability.supportsPipeThrottling());
 
         final Pipe p = Pipe.createLocalToRemote();
 
@@ -170,7 +212,7 @@ public class PipeTest extends RmiTestBase implements Serializable {
         // 2. make sure the writer thread is still alive, blocking
         // 3. read the rest
 
-        ISaturationTest target = channel.call(new CreateSaturationTestProxy(p));
+        ISaturationTest target = channelRule.getChannel().call(new CreateSaturationTestProxy(p));
 
         // make sure the pipe is connected
         target.ensureConnected();
@@ -245,9 +287,10 @@ public class PipeTest extends RmiTestBase implements Serializable {
         in.close();
     }
 
-
+    @Test
+    @Ignore("Takes a long time to run")
     public void _testSendBigStuff() throws Exception {
-        OutputStream f = channel.call(new DevNullSink());
+        OutputStream f = channelRule.getChannel().call(new DevNullSink());
 
         for (int i=0; i<1024*1024; i++)
             f.write(new byte[8000]);
@@ -257,15 +300,10 @@ public class PipeTest extends RmiTestBase implements Serializable {
     /**
      * Writer end closes even before the remote computation kicks in.
      */
+    @Test
     public void testQuickBurstWrite() throws Exception {
         final Pipe p = Pipe.createLocalToRemote();
-        Future<Integer> f = channel.callAsync(new Callable<Integer, IOException>() {
-            public Integer call() throws IOException {
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                IOUtils.copy(p.getIn(), baos);
-                return baos.size();
-            }
-        });
+        Future<Integer> f = channelRule.getChannel().callAsync(new CountBytes(p));
         OutputStream os = p.getOut();
         os.write(1);
         os.close();
@@ -281,10 +319,6 @@ public class PipeTest extends RmiTestBase implements Serializable {
             return new RemoteOutputStream(new NullOutputStream());
         }
 
-    }
-
-    public static Test suite() throws Exception {
-        return buildSuite(PipeTest.class);
     }
 
     private Object writeReplace() {
